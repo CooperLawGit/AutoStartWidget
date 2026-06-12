@@ -11,7 +11,16 @@ var tests = new (string Name, Action Run)[]
     ("lock pauses and unlock resets work timer", LockPausesAndUnlockResetsWorkTimer),
     ("work remaining reaches zero at 20 minutes", WorkRemainingReachesZeroAtTwentyMinutes),
     ("break due only after work duration", BreakDueOnlyAfterWorkDuration),
-    ("break remaining counts down then clamps to zero", BreakRemainingCountsDownThenClampsToZero)
+    ("break remaining counts down then clamps to zero", BreakRemainingCountsDownThenClampsToZero),
+    ("default app settings enable screenshot and eye care modules", DefaultAppSettingsEnableModules),
+    ("screenshot settings carry hotkey topmost and save directory", ScreenshotSettingsCarryEditableValues),
+    ("default screenshot hotkey data matches Setuna Ctrl D1", DefaultScreenshotHotKeyMatchesSetuna),
+    ("screenshot dust box restores latest closed item first", ScreenshotDustBoxRestoresLatestClosedItemFirst),
+    ("screenshot dust box evicts oldest item when capacity is exceeded", ScreenshotDustBoxEvictsOldestItem),
+    ("screenshot dust box clear removes all restorable items", ScreenshotDustBoxClearRemovesAllItems),
+    ("screenshot view zoom wheel changes by ten percent per notch", ScreenshotViewZoomWheelChangesByTenPercent),
+    ("screenshot view transform tracks rotate and flips", ScreenshotViewTransformTracksRotateAndFlips),
+    ("screenshot view compact toggles on double click", ScreenshotViewCompactToggles)
 };
 
 foreach (var test in tests)
@@ -144,6 +153,107 @@ static void BreakRemainingCountsDownThenClampsToZero()
     AssertEqual(
         TimeSpan.Zero,
         EyeCareSchedule.GetBreakRemaining(startedAt, startedAt.AddSeconds(30), EyeCareSettings.Default));
+}
+
+static void DefaultAppSettingsEnableModules()
+{
+    var settings = AutoStartWidgetSettings.Default;
+
+    AssertTrue(settings.Modules.ScreenshotEnabled);
+    AssertTrue(settings.Modules.EyeCareEnabled);
+    AssertEqual(131121, settings.Screenshot.HotKeyData);
+    AssertTrue(settings.Screenshot.HotKeyEnabled);
+    AssertTrue(settings.Screenshot.TopMost);
+}
+
+static void ScreenshotSettingsCarryEditableValues()
+{
+    var settings = ScreenshotSettings.Default with
+    {
+        HotKeyData = 131122,
+        HotKeyEnabled = false,
+        TopMost = false,
+        SaveDirectory = @"D:\shots"
+    };
+
+    AssertEqual(131122, settings.HotKeyData);
+    AssertFalse(settings.HotKeyEnabled);
+    AssertFalse(settings.TopMost);
+    AssertEqual(@"D:\shots", settings.SaveDirectory);
+}
+
+static void DefaultScreenshotHotKeyMatchesSetuna()
+{
+    AssertEqual(131121, ScreenshotSettings.Default.HotKeyData);
+}
+
+static void ScreenshotDustBoxRestoresLatestClosedItemFirst()
+{
+    var dustBox = new ScreenshotDustBox<string>(capacity: 3);
+
+    dustBox.Add("first");
+    dustBox.Add("second");
+
+    AssertEqual(2, dustBox.Count);
+    AssertEqual("second", dustBox.RestoreLatest());
+    AssertEqual("first", dustBox.RestoreLatest());
+    AssertEqual(0, dustBox.Count);
+}
+
+static void ScreenshotDustBoxEvictsOldestItem()
+{
+    var dustBox = new ScreenshotDustBox<string>(capacity: 2);
+
+    dustBox.Add("first");
+    dustBox.Add("second");
+    dustBox.Add("third");
+
+    AssertEqual(2, dustBox.Count);
+    AssertEqual("third", dustBox.RestoreLatest());
+    AssertEqual("second", dustBox.RestoreLatest());
+}
+
+static void ScreenshotDustBoxClearRemovesAllItems()
+{
+    var dustBox = new ScreenshotDustBox<string>(capacity: 3);
+
+    dustBox.Add("first");
+    dustBox.Add("second");
+    dustBox.Clear();
+
+    AssertEqual(0, dustBox.Count);
+    AssertEqual(null, dustBox.RestoreLatest());
+}
+
+static void ScreenshotViewZoomWheelChangesByTenPercent()
+{
+    var state = ScreenshotViewState.Default;
+
+    state = state.ZoomByWheelDelta(120);
+    AssertEqual(110, state.ZoomPercent);
+
+    state = state.ZoomByWheelDelta(-240);
+    AssertEqual(90, state.ZoomPercent);
+
+    state = state.ZoomTo(150);
+    AssertEqual(150, state.ZoomPercent);
+}
+
+static void ScreenshotViewTransformTracksRotateAndFlips()
+{
+    var state = ScreenshotViewState.Default.Rotate90().Rotate90().FlipHorizontal().FlipVertical();
+
+    AssertEqual(180, state.RotationDegrees);
+    AssertTrue(state.FlippedHorizontal);
+    AssertTrue(state.FlippedVertical);
+}
+
+static void ScreenshotViewCompactToggles()
+{
+    var state = ScreenshotViewState.Default.ToggleCompact();
+
+    AssertTrue(state.IsCompact);
+    AssertFalse(state.ToggleCompact().IsCompact);
 }
 
 static void AssertEqual<T>(T expected, T actual)

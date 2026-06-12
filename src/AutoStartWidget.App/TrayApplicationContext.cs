@@ -1,22 +1,23 @@
 using AutoStartWidget.Core;
-using Microsoft.Win32;
+using AutoStartWidget.App.Modules;
 
 namespace AutoStartWidget.App;
 
 internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly NotifyIcon notifyIcon;
-    private readonly System.Windows.Forms.Timer timer;
-    private readonly BreakReminderHistory breakReminderHistory = new();
-    private readonly WorkSessionClock workSessionClock;
-    private EyeCareSettings settings;
-    private bool breakActive;
+    private readonly EyeCareModule eyeCareModule;
+    private readonly ScreenshotModule screenshotModule;
+    private AutoStartWidgetSettings settings;
 
-    public TrayApplicationContext(EyeCareSettings settings)
+    public TrayApplicationContext(AutoStartWidgetSettings settings)
     {
-        settings.Validate();
+        settings.EyeCare.Validate();
+        settings.Screenshot.Validate();
         this.settings = settings;
-        workSessionClock = new WorkSessionClock(DateTimeOffset.Now);
+        eyeCareModule = new EyeCareModule(settings.EyeCare, settings.Modules.EyeCareEnabled);
+        screenshotModule = new ScreenshotModule(settings.Screenshot, settings.Modules.ScreenshotEnabled);
+        screenshotModule.SettingsChanged += (_, _) => SaveSettings();
 
         notifyIcon = new NotifyIcon
         {
@@ -26,25 +27,55 @@ internal sealed class TrayApplicationContext : ApplicationContext
             ContextMenuStrip = BuildMenu()
         };
 
-        timer = new System.Windows.Forms.Timer
-        {
-            Interval = 1000
-        };
-        timer.Tick += OnTick;
-        timer.Start();
-        SystemEvents.SessionSwitch += OnSessionSwitch;
     }
 
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("截图", null, (_, _) => ScreenshotToolLauncher.Start(null!));
-        menu.Items.Add("设置", null, (_, _) => OpenSettings());
-        menu.Items.Add("立即护眼", null, (_, _) => ShowProtectionScreen(countSkippedBreak: false));
+        menu.Items.Add(BuildScreenshotMenu());
+        menu.Items.Add(BuildEyeCareMenu());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(BuildStartupMenuItem());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ExitThread());
+        return menu;
+    }
+
+    private ToolStripMenuItem BuildScreenshotMenu()
+    {
+        var menu = new ToolStripMenuItem("截图工具") { Checked = screenshotModule.Enabled };
+        menu.DropDownItems.Add("启用", null, (_, _) => ToggleScreenshot(menu));
+        menu.DropDownItems.Add("立即截图（区域）", null, (_, _) => screenshotModule.CaptureRegion());
+        menu.DropDownItems.Add("窗口截图", null, (_, _) => screenshotModule.CaptureWindow());
+        menu.DropDownItems.Add(new ToolStripSeparator());
+        menu.DropDownItems.Add("恢复最近关闭", null, (_, _) => screenshotModule.RestoreLatest());
+        menu.DropDownItems.Add("清空废纸篓", null, (_, _) => screenshotModule.ClearDustBox());
+        menu.DropDownItems.Add(new ToolStripSeparator());
+        menu.DropDownItems.Add("设置", null, (_, _) => OpenScreenshotSettings());
+        menu.DropDownOpening += (_, _) =>
+        {
+            menu.Checked = screenshotModule.Enabled;
+            menu.DropDownItems[0].Text = screenshotModule.Enabled ? "禁用" : "启用";
+            menu.DropDownItems[1].Enabled = screenshotModule.Enabled;
+            menu.DropDownItems[2].Enabled = screenshotModule.Enabled;
+            menu.DropDownItems[4].Enabled = screenshotModule.Enabled && screenshotModule.DustCount > 0;
+            menu.DropDownItems[5].Enabled = screenshotModule.Enabled && screenshotModule.DustCount > 0;
+        };
+        return menu;
+    }
+
+    private ToolStripMenuItem BuildEyeCareMenu()
+    {
+        var menu = new ToolStripMenuItem("护眼助手") { Checked = eyeCareModule.Enabled };
+        menu.DropDownItems.Add("启用", null, (_, _) => ToggleEyeCare(menu));
+        menu.DropDownItems.Add("立即护眼", null, (_, _) => eyeCareModule.ShowNow());
+        menu.DropDownItems.Add("设置", null, (_, _) => OpenEyeCareSettings());
+        menu.DropDownOpening += (_, _) =>
+        {
+            menu.Checked = eyeCareModule.Enabled;
+            menu.DropDownItems[0].Text = eyeCareModule.Enabled ? "禁用" : "启用";
+            menu.DropDownItems[1].Enabled = eyeCareModule.Enabled;
+        };
         return menu;
     }
 
@@ -74,68 +105,47 @@ internal sealed class TrayApplicationContext : ApplicationContext
         return item;
     }
 
-    private void OnTick(object? sender, EventArgs e)
+    private void ToggleScreenshot(ToolStripMenuItem menu)
     {
-        if (breakActive)
-        {
-            return;
-        }
-
-        if (!workSessionClock.IsBreakDue(DateTimeOffset.Now, settings))
-        {
-            return;
-        }
-
-        ShowProtectionScreen(countSkippedBreak: true);
+        screenshotModule.SetEnabled(!screenshotModule.Enabled);
+        menu.Checked = screenshotModule.Enabled;
+        SaveSettings();
     }
 
-    private void ShowProtectionScreen(bool countSkippedBreak)
+    private void ToggleEyeCare(ToolStripMenuItem menu)
     {
-        if (breakActive)
-        {
-            return;
-        }
-
-        breakActive = true;
-        using var screen = new ProtectionScreenForm(settings, breakReminderHistory.EarlyCloseCount);
-        screen.ShowDialog();
-        breakReminderHistory.RecordBreakCompleted(screen.CompletedNaturally, countSkippedBreak);
-        workSessionClock.Reset(DateTimeOffset.Now);
-        breakActive = false;
+        eyeCareModule.SetEnabled(!eyeCareModule.Enabled);
+        menu.Checked = eyeCareModule.Enabled;
+        SaveSettings();
     }
 
-    private void OpenSettings()
+    private void OpenScreenshotSettings()
     {
-        using var form = new SettingsForm(settings);
-        if (form.ShowDialog() != DialogResult.OK)
-        {
-            return;
-        }
+        screenshotModule.OpenSettings(null!);
+        SaveSettings();
+    }
 
-        settings = form.SavedSettings;
+    private void OpenEyeCareSettings()
+    {
+        eyeCareModule.UpdateSettings(eyeCareModule.OpenSettings(null!));
+        SaveSettings();
+    }
+
+    private void SaveSettings()
+    {
+        settings = settings with
+        {
+            Modules = new ModuleSettings(screenshotModule.Enabled, eyeCareModule.Enabled),
+            EyeCare = eyeCareModule.Settings,
+            Screenshot = screenshotModule.Settings
+        };
         AppSettingsStore.Save(settings);
-        workSessionClock.Reset(DateTimeOffset.Now);
-    }
-
-    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
-    {
-        if (e.Reason == SessionSwitchReason.SessionLock)
-        {
-            workSessionClock.Lock(DateTimeOffset.Now);
-            return;
-        }
-
-        if (e.Reason is SessionSwitchReason.SessionUnlock or SessionSwitchReason.SessionLogon)
-        {
-            workSessionClock.Unlock(DateTimeOffset.Now);
-        }
     }
 
     protected override void ExitThreadCore()
     {
-        timer.Stop();
-        timer.Dispose();
-        SystemEvents.SessionSwitch -= OnSessionSwitch;
+        eyeCareModule.Dispose();
+        screenshotModule.Dispose();
         notifyIcon.Visible = false;
         notifyIcon.Dispose();
         base.ExitThreadCore();
