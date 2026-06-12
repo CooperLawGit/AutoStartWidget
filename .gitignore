@@ -1,0 +1,8 @@
+.vs/
+bin/
+obj/
+Release/
+*.user
+*.suo
+.tools/
+src/Setuna.Legacy/packages/

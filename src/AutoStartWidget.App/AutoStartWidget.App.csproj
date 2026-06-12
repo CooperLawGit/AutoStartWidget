@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationIcon>Assets\AutoStartWidget.ico</ApplicationIcon>
+    <AssemblyName>AutoStartWidget</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AutoStartWidget.Core\AutoStartWidget.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Setuna.Legacy\SETUNA\bin\x64\Release\SETUNA.exe" Link="Setuna\SETUNA.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\Setuna.Legacy\SETUNA\bin\x64\Release\SETUNA.exe')" />
+    <None Include="..\Setuna.Legacy\SETUNA\bin\x64\Release\SETUNA.exe.config" Link="Setuna\SETUNA.exe.config" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\Setuna.Legacy\SETUNA\bin\x64\Release\SETUNA.exe.config')" />
+  </ItemGroup>
+
+  <Target Name="RemovePublishedXmlDocs" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishedXmlDocs Include="$(PublishDir)*.xml" />
+    </ItemGroup>
+    <Delete Files="@(PublishedXmlDocs)" />
+  </Target>
+</Project>
