@@ -45,8 +45,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         var menu = new ToolStripMenuItem("截图工具") { Checked = screenshotModule.Enabled };
         menu.DropDownItems.Add("启用", null, (_, _) => ToggleScreenshot(menu));
-        menu.DropDownItems.Add("立即截图（区域）", null, (_, _) => screenshotModule.CaptureRegion());
-        menu.DropDownItems.Add("窗口截图", null, (_, _) => screenshotModule.CaptureWindow());
+        menu.DropDownItems.Add("截图", null, (_, _) => screenshotModule.CaptureRegion());
         menu.DropDownItems.Add(new ToolStripSeparator());
         menu.DropDownItems.Add("恢复最近关闭", null, (_, _) => screenshotModule.RestoreLatest());
         menu.DropDownItems.Add("清空废纸篓", null, (_, _) => screenshotModule.ClearDustBox());
@@ -57,9 +56,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             menu.Checked = screenshotModule.Enabled;
             menu.DropDownItems[0].Text = screenshotModule.Enabled ? "禁用" : "启用";
             menu.DropDownItems[1].Enabled = screenshotModule.Enabled;
-            menu.DropDownItems[2].Enabled = screenshotModule.Enabled;
+            menu.DropDownItems[3].Enabled = screenshotModule.Enabled && screenshotModule.DustCount > 0;
             menu.DropDownItems[4].Enabled = screenshotModule.Enabled && screenshotModule.DustCount > 0;
-            menu.DropDownItems[5].Enabled = screenshotModule.Enabled && screenshotModule.DustCount > 0;
         };
         return menu;
     }

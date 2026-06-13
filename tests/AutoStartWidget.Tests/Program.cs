@@ -1,4 +1,5 @@
 using AutoStartWidget.Core;
+using System.Drawing;
 
 var tests = new (string Name, Action Run)[]
 {
@@ -18,6 +19,9 @@ var tests = new (string Name, Action Run)[]
     ("screenshot dust box restores latest closed item first", ScreenshotDustBoxRestoresLatestClosedItemFirst),
     ("screenshot dust box evicts oldest item when capacity is exceeded", ScreenshotDustBoxEvictsOldestItem),
     ("screenshot dust box clear removes all restorable items", ScreenshotDustBoxClearRemovesAllItems),
+    ("screenshot selection snaps nearby edges to window bounds", ScreenshotSelectionSnapsNearbyEdges),
+    ("screenshot selection snaps to nearby window from candidates", ScreenshotSelectionSnapsToNearbyWindowCandidates),
+    ("screenshot selection leaves distant edges unchanged", ScreenshotSelectionLeavesDistantEdges),
     ("screenshot view zoom wheel changes by ten percent per notch", ScreenshotViewZoomWheelChangesByTenPercent),
     ("screenshot view transform tracks rotate and flips", ScreenshotViewTransformTracksRotateAndFlips),
     ("screenshot view compact toggles on double click", ScreenshotViewCompactToggles)
@@ -223,6 +227,40 @@ static void ScreenshotDustBoxClearRemovesAllItems()
 
     AssertEqual(0, dustBox.Count);
     AssertEqual(null, dustBox.RestoreLatest());
+}
+
+static void ScreenshotSelectionSnapsNearbyEdges()
+{
+    var selection = Rectangle.FromLTRB(104, 96, 498, 405);
+    var window = Rectangle.FromLTRB(100, 100, 500, 400);
+
+    var snapped = ScreenshotSelectionSnapper.SnapToWindow(selection, window, threshold: 8);
+
+    AssertEqual(window, snapped);
+}
+
+static void ScreenshotSelectionSnapsToNearbyWindowCandidates()
+{
+    var selection = Rectangle.FromLTRB(104, 96, 498, 405);
+    var windows = new[]
+    {
+        Rectangle.FromLTRB(700, 100, 900, 400),
+        Rectangle.FromLTRB(100, 100, 500, 400)
+    };
+
+    var snapped = ScreenshotSelectionSnapper.SnapToNearestWindow(selection, windows, threshold: 8);
+
+    AssertEqual(Rectangle.FromLTRB(100, 100, 500, 400), snapped);
+}
+
+static void ScreenshotSelectionLeavesDistantEdges()
+{
+    var selection = Rectangle.FromLTRB(80, 120, 540, 380);
+    var window = Rectangle.FromLTRB(100, 100, 500, 400);
+
+    var snapped = ScreenshotSelectionSnapper.SnapToWindow(selection, window, threshold: 8);
+
+    AssertEqual(selection, snapped);
 }
 
 static void ScreenshotViewZoomWheelChangesByTenPercent()

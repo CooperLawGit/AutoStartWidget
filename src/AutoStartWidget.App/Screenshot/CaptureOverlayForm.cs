@@ -1,21 +1,23 @@
+using AutoStartWidget.Core;
+
 namespace AutoStartWidget.App.Screenshot;
 
 internal sealed class CaptureOverlayForm : Form
 {
-    private readonly CaptureMode mode;
+    private const int WindowSnapThreshold = 12;
     private readonly Rectangle virtualBounds;
     private readonly Bitmap screenImage;
+    private readonly IReadOnlyList<Rectangle> windowBounds;
     private Point dragStart;
     private Point dragCurrent;
     private bool dragging;
-    private Rectangle? highlightedWindow;
 
     public CapturedImage? Result { get; private set; }
 
-    public CaptureOverlayForm(CaptureMode mode)
+    public CaptureOverlayForm()
     {
-        this.mode = mode;
         virtualBounds = SystemInformation.VirtualScreen;
+        windowBounds = WindowTargetFinder.FindVisibleWindowBounds(virtualBounds);
         screenImage = ScreenCapture.Capture(virtualBounds);
 
         FormBorderStyle = FormBorderStyle.None;
@@ -49,14 +51,9 @@ internal sealed class CaptureOverlayForm : Form
             return;
         }
 
-        if (mode == CaptureMode.Window && highlightedWindow is { } windowBounds)
-        {
-            CompleteCapture(windowBounds);
-            return;
-        }
-
         dragging = true;
-        dragStart = PointToScreen(e.Location);
+        var screenPoint = PointToScreen(e.Location);
+        dragStart = screenPoint;
         dragCurrent = dragStart;
         Invalidate();
     }
@@ -71,9 +68,6 @@ internal sealed class CaptureOverlayForm : Form
             return;
         }
 
-        highlightedWindow = mode == CaptureMode.Window
-            ? WindowTargetFinder.FindWindowBounds(screenPoint)
-            : null;
         Invalidate();
     }
 
@@ -86,7 +80,7 @@ internal sealed class CaptureOverlayForm : Form
 
         dragging = false;
         dragCurrent = PointToScreen(e.Location);
-        var selection = Normalize(dragStart, dragCurrent);
+        var selection = GetSelection();
         if (selection.Width < 2 || selection.Height < 2)
         {
             Invalidate();
@@ -102,7 +96,7 @@ internal sealed class CaptureOverlayForm : Form
         using var shade = new SolidBrush(Color.FromArgb(90, Color.Black));
         e.Graphics.FillRectangle(shade, ClientRectangle);
 
-        var target = dragging ? Normalize(dragStart, dragCurrent) : highlightedWindow;
+        Rectangle? target = dragging ? GetSelection() : null;
         if (target is not { } bounds)
         {
             DrawHint(e.Graphics);
@@ -155,7 +149,13 @@ internal sealed class CaptureOverlayForm : Form
     {
         using var font = new Font("Microsoft YaHei", 14F, FontStyle.Regular);
         using var brush = new SolidBrush(Color.White);
-        graphics.DrawString("拖拽选择区域；窗口截图模式下点击高亮窗口；Esc 取消", font, brush, 24, 24);
+        graphics.DrawString("左键拖拽选择区域；靠近窗口边界自动吸附；Esc 取消", font, brush, 24, 24);
+    }
+
+    private Rectangle GetSelection()
+    {
+        var selection = Normalize(dragStart, dragCurrent);
+        return ScreenshotSelectionSnapper.SnapToNearestWindow(selection, windowBounds, WindowSnapThreshold);
     }
 
     private static void DrawSize(Graphics graphics, Rectangle local, Rectangle screenBounds)

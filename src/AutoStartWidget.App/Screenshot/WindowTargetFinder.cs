@@ -4,36 +4,47 @@ namespace AutoStartWidget.App.Screenshot;
 
 internal static class WindowTargetFinder
 {
-    private const uint GaRoot = 2;
-
-    public static Rectangle? FindWindowBounds(Point screenPoint)
+    public static IReadOnlyList<Rectangle> FindVisibleWindowBounds(Rectangle virtualBounds)
     {
-        var handle = WindowFromPoint(screenPoint);
-        if (handle == IntPtr.Zero)
+        var windows = new List<Rectangle>();
+        EnumWindows((handle, _) =>
         {
-            return null;
-        }
+            if (!IsWindowVisible(handle) || !GetWindowRect(handle, out var rect))
+            {
+                return true;
+            }
 
-        var root = GetAncestor(handle, GaRoot);
-        if (root == IntPtr.Zero || !IsWindowVisible(root) || !GetWindowRect(root, out var rect))
-        {
-            return null;
-        }
+            var bounds = rect.ToRectangle();
+            if (IsUsableWindowBounds(bounds, virtualBounds))
+            {
+                windows.Add(bounds);
+            }
 
-        var bounds = rect.ToRectangle();
-        if (bounds.Width <= 1 || bounds.Height <= 1)
-        {
-            return null;
-        }
+            return true;
+        }, IntPtr.Zero);
 
-        return bounds;
+        return windows;
     }
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr WindowFromPoint(Point point);
+    private static bool IsUsableWindowBounds(Rectangle bounds, Rectangle virtualBounds)
+    {
+        if (bounds.Width <= 1 || bounds.Height <= 1)
+        {
+            return false;
+        }
+
+        if (!bounds.IntersectsWith(virtualBounds))
+        {
+            return false;
+        }
+
+        return bounds != virtualBounds;
+    }
+
+    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
     [DllImport("user32.dll")]
-    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
 
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr hwnd);

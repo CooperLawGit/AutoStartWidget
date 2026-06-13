@@ -45,12 +45,7 @@ internal sealed class ScreenshotModule : IDisposable
 
     public void CaptureRegion()
     {
-        Capture(CaptureMode.Region);
-    }
-
-    public void CaptureWindow()
-    {
-        Capture(CaptureMode.Window);
+        Capture();
     }
 
     public void RestoreLatest()
@@ -115,14 +110,14 @@ internal sealed class ScreenshotModule : IDisposable
         ClearDustBox();
     }
 
-    private void Capture(CaptureMode mode)
+    private void Capture()
     {
         if (!enabled)
         {
             return;
         }
 
-        using var overlay = new CaptureOverlayForm(mode);
+        using var overlay = new CaptureOverlayForm();
         if (overlay.ShowDialog() != DialogResult.OK || overlay.Result is null)
         {
             return;
